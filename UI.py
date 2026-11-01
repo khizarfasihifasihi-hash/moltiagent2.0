@@ -37,7 +37,7 @@ if not GROQ_API_KEY:
     )
     st.stop()
 
-GROQ_MODEL = "llama-3.3-70b-versatile"  # faster/cheaper option: "llama-3.1-8b-instant"
+GROQ_MODEL = "openai/gpt-oss-120b"  # faster/cheaper option: "openai/gpt-oss-20b"
 
 
 # Model factory (cached)
