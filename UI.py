@@ -1,9 +1,11 @@
+import io
 import os
 import re
+
 import streamlit as st
 import streamlit.components.v1 as components
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_mistralai import ChatMistralAI
+from langchain_groq import ChatGroq
 
 # ---------------------------------------------------------------------------
 # UI basics
@@ -13,15 +15,40 @@ st.set_page_config(page_title="Multi-personal AI Chatbot", layout="centered")
 if os.path.exists("Image.png"):
     st.image("Image.png", width=150)
 
-# Mistral API key
-os.environ["MISTRAL_API_KEY"] = "EpgVFLlyQVkXWFmHv0lDwsMlZymmDoGP"
+
+# ---------------------------------------------------------------------------
+# Groq API key (environment variable or Streamlit secrets, never hardcoded)
+# ---------------------------------------------------------------------------
+def get_groq_key():
+    key = os.getenv("GROQ_API_KEY")
+    if key:
+        return key
+    try:
+        return st.secrets["GROQ_API_KEY"]
+    except Exception:
+        return None
+
+
+GROQ_API_KEY = get_groq_key()
+if not GROQ_API_KEY:
+    st.error(
+        "GROQ_API_KEY is not set. Add it as an environment variable "
+        "or in .streamlit/secrets.toml."
+    )
+    st.stop()
+
+GROQ_MODEL = "llama-3.3-70b-versatile"  # faster/cheaper option: "llama-3.1-8b-instant"
 
 
 # Model factory (cached)
 @st.cache_resource
 def get_model():
     # adjust model name / temperature if needed
-    return ChatMistralAI(model="mistral-small-2506", temperature=0.9)
+    return ChatGroq(
+        model=GROQ_MODEL,
+        temperature=0.9,
+        api_key=GROQ_API_KEY,
+    )
 
 
 model = get_model()
@@ -97,12 +124,13 @@ uploaded_file = st.sidebar.file_uploader(
     type=["txt", "pdf", "py", "csv", "json"],
 )
 
-MAX_DOC_CHARS = 20_000  # keep the system prompt from ballooning / blowing the context window
+# Keep the system prompt from ballooning / blowing the context window.
+# Lower this if you hit Groq rate-limit (tokens per minute) errors.
+MAX_DOC_CHARS = 20_000
 
 
 def extract_pdf_text(raw_bytes: bytes) -> str:
     """Extract text from a PDF's raw bytes using pypdf."""
-    import io
     from pypdf import PdfReader
 
     reader = PdfReader(io.BytesIO(raw_bytes))
@@ -248,7 +276,7 @@ def render_code_tools(lang: str, code: str, key_suffix: str) -> None:
             components.html(code, height=500, scrolling=True)
 
     st.download_button(
-        label=f" Download {file_name}",
+        label=f"Download {file_name}",
         data=code,
         file_name=file_name,
         mime=mime,
